@@ -1,88 +1,169 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TürkiyeAI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TürkiyeAI</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  #historyPanel { max-height: 200px; overflow-y:auto; }
+  #chatPanel { flex:1; overflow-y:auto; }
+  #imageResult img { max-height:300px; border-radius:12px; }
+</style>
 </head>
-<body class="bg-gradient-to-br from-slate-100 to-blue-100 min-h-screen flex flex-col items-center p-4">
-  <div class="w-full max-w-md bg-white shadow-lg rounded-2xl p-4 flex flex-col flex-grow">
-    <h1 class="text-2xl font-bold text-center text-blue-600 mb-4">🇹🇷 TürkiyeAI</h1>
+<body class="bg-gradient-to-br from-slate-100 to-blue-100 dark:from-gray-900 dark:to-gray-800 min-h-screen flex flex-col items-center p-4 transition-colors">
 
-    <div id="chat" class="flex-1 overflow-y-auto space-y-3 mb-3">
-      <!-- Mesajlar buraya eklenecek -->
+<div class="w-full max-w-3xl flex flex-col md:flex-row gap-4">
+
+  <!-- Sohbet Paneli -->
+  <div class="flex-1 bg-white dark:bg-gray-900 dark:text-gray-100 shadow-lg rounded-2xl p-4 flex flex-col">
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-2xl font-bold text-blue-600 dark:text-blue-400">TürkiyeAI</h1>
+      <button id="themeToggle" class="text-sm bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-lg">🌙</button>
     </div>
 
-    <div class="flex items-center space-x-2">
-      <input id="input" class="flex-1 border border-gray-300 rounded-xl px-3 py-2" placeholder="Bir şey yaz..." />
-      <button onclick="sendMessage()" class="bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-4 py-2">
-        Gönder
-      </button>
+    <div id="chatPanel" class="flex-1 mb-3"></div>
+
+    <div class="flex items-center space-x-2 mb-2">
+      <input id="input" class="flex-1 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 dark:bg-gray-800" placeholder="Yaz veya konuş..." />
+      <button id="micBtn" class="bg-gray-500 hover:bg-gray-600 text-white rounded-xl px-3 py-2">🎤</button>
+      <button onclick="sendMessage()" class="bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-4 py-2">Gönder</button>
     </div>
+
+    <div class="flex gap-2 mb-2">
+      <button onclick="generateImage()" class="bg-green-500 hover:bg-green-600 text-white rounded-xl px-4 py-2 flex-1">🖼️ Resim Oluştur</button>
+      <button onclick="playLastBot()" class="bg-purple-500 hover:bg-purple-600 text-white rounded-xl px-4 py-2 flex-1">🔊 Son Bot Sesini Çal</button>
+    </div>
+
+    <div id="imageResult" class="flex flex-col items-center mt-2"></div>
   </div>
 
-  <footer class="mt-4 text-sm text-gray-500">
-    © 2025 TürkiyeAI – Google Gemini API ile güçlendirilmiştir
-  </footer>
+  <!-- Sohbet Geçmişi Paneli -->
+  <div class="w-full md:w-72 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 shadow-lg rounded-2xl p-3 flex flex-col">
+    <h2 class="text-lg font-semibold mb-2">Sohbet Geçmişi</h2>
+    <div id="historyPanel" class="flex-1 space-y-1"></div>
+    <button onclick="clearHistory()" class="bg-red-500 hover:bg-red-600 text-white rounded-xl px-3 py-1 mt-2">🗑️ Temizle</button>
+  </div>
 
-  <script>
-    const API_KEY = "AIzaSyAx-BVK-tBqTQOm3Y0QLe8TfMrl33en0_I";
-    const MODEL = "gemini-1.5-flash";
+</div>
 
-    const chatBox = document.getElementById("chat");
-    const input = document.getElementById("input");
+<footer class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+  © 2025 TürkiyeAI – Google Gemini API ile güçlendirilmiştir
+</footer>
 
-    function addMessage(text, sender) {
-      const div = document.createElement("div");
-      div.className = `p-3 rounded-xl max-w-[80%] ${
-        sender === "user"
-          ? "bg-blue-100 self-end text-right ml-auto"
-          : "bg-gray-100 text-left mr-auto"
-      }`;
-      div.textContent = text;
-      chatBox.appendChild(div);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
+<script>
+const API_KEY = "AIzaSyAx-BVK-tBqTQOm3Y0QLe8TfMrl33en0_I";
+const MODEL_CHAT = "gemini-1.5-flash";
+const MODEL_IMAGE = "gemini-1.5-pro";
 
-    async function sendMessage() {
-      const text = input.value.trim();
-      if (!text) return;
+const chatPanel = document.getElementById("chatPanel");
+const historyPanel = document.getElementById("historyPanel");
+const input = document.getElementById("input");
+const micBtn = document.getElementById("micBtn");
+const themeToggle = document.getElementById("themeToggle");
+const imageResult = document.getElementById("imageResult");
 
-      addMessage(text, "user");
-      input.value = "";
+let messages = JSON.parse(localStorage.getItem("turkiyeAI_messages") || "[]");
+messages.forEach(m => { addMessage(m.text, m.role, false); addHistory(m.text,m.role); });
+let lastBotText="";
 
-      const body = {
-        contents: [{ role: "user", parts: [{ text }] }],
-      };
+// 🌙 Karanlık mod
+themeToggle.addEventListener("click",()=>{document.body.classList.toggle("dark"); themeToggle.textContent=document.body.classList.contains("dark")?"☀️":"🌙";});
 
-      addMessage("⏳ TürkiyeAI düşünüyor...", "bot");
+// 🎤 Speech-to-Text
+let recognition;
+if("webkitSpeechRecognition" in window){
+  recognition=new webkitSpeechRecognition();
+  recognition.lang="tr-TR"; recognition.continuous=false; recognition.interimResults=false;
+  micBtn.addEventListener("click",()=>{ recognition.start(); micBtn.textContent="🎧"; });
+  recognition.onresult=(e)=>{ input.value=e.results[0][0].transcript; micBtn.textContent="🎤"; };
+  recognition.onerror=()=>{ micBtn.textContent="🎤"; };
+}else{ micBtn.disabled=true; micBtn.textContent="🚫"; micBtn.title="Tarayıcı ses desteği vermiyor"; }
 
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          }
-        );
+function addMessage(text,sender,save=true){
+  const div=document.createElement("div");
+  div.className=`p-3 rounded-xl max-w-[80%] whitespace-pre-wrap ${
+    sender==="user"? "bg-blue-100 dark:bg-blue-800 self-end text-right ml-auto":"bg-gray-100 dark:bg-gray-700 text-left mr-auto"
+  }`;
+  div.textContent=text;
+  chatPanel.appendChild(div); chatPanel.scrollTop=chatPanel.scrollHeight;
 
-        const data = await res.json();
-        const reply =
-          data.candidates?.[0]?.content?.parts?.[0]?.text ||
-          "⚠️ Yanıt alınamadı.";
-        chatBox.lastChild.remove(); // “Yazıyor...” mesajını sil
-        addMessage(reply, "bot");
-      } catch (err) {
-        chatBox.lastChild.remove();
-        addMessage("❌ Hata: " + err.message, "bot");
-      }
-    }
+  if(sender==="bot" && 'speechSynthesis' in window){
+    lastBotText=text;
+    const utterance=new SpeechSynthesisUtterance(text);
+    utterance.lang="tr-TR";
+    window.speechSynthesis.speak(utterance);
+  }
 
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") sendMessage();
-    });
-  </script>
+  if(save){ messages.push({role:sender,text}); saveMessages(); addHistory(text,sender); }
+}
+
+function saveMessages(){ localStorage.setItem("turkiyeAI_messages",JSON.stringify(messages)); }
+
+function addHistory(text,role){
+  const div=document.createElement("div");
+  div.className="p-1 rounded bg-gray-200 dark:bg-gray-700 text-sm truncate";
+  div.textContent=(role==="user"?"👤 ":"🤖 ")+text;
+  historyPanel.appendChild(div); historyPanel.scrollTop=historyPanel.scrollHeight;
+}
+
+function clearHistory(){ messages=[]; saveMessages(); chatPanel.innerHTML=""; historyPanel.innerHTML=""; }
+
+// 💬 Chat Gönder ve Matematik Çöz
+async function sendMessage(){
+  let text=input.value.trim(); if(!text) return;
+  addMessage(text,"user"); input.value="";
+
+  // Basit matematik sorusu algılama: sayı ve + - * / = veya integral/denklem varsa
+  const mathRegex=/[\d+\-*/=^]|integral|∫|dx|x/;
+  let prompt=text;
+  if(mathRegex.test(text.toLowerCase())){
+    prompt="Lütfen adım adım çöz: " + text;
+  }
+
+  addMessage("⏳ TürkiyeAI düşünüyor...","bot");
+
+  try{
+    const res=await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_CHAT}:generateContent?key=${API_KEY}`,
+      { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt}]}]}) }
+    );
+    const data=await res.json();
+    const reply=data.candidates?.[0]?.content?.parts?.[0]?.text || "⚠️ Yanıt alınamadı.";
+    chatPanel.lastChild.remove();
+    addMessage(reply,"bot");
+  }catch(err){ chatPanel.lastChild.remove(); addMessage("❌ Hata: "+err.message,"bot"); }
+}
+
+input.addEventListener("keydown",e=>{ if(e.key==="Enter") sendMessage(); });
+
+// 🖼️ Resim oluşturma + önizleme + kaydet
+async function generateImage(){
+  const prompt=input.value.trim(); if(!prompt) return;
+  input.value=""; imageResult.innerHTML="⏳ Resim oluşturuluyor...";
+
+  try{
+    const res=await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_IMAGE}:generateImage?key=${API_KEY}`,
+      { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({prompt}) }
+    );
+    const data=await res.json();
+    const imgUrl=data.data?.[0]?.url;
+    if(imgUrl){
+      imageResult.innerHTML=`<img id="lastImage" src="${imgUrl}" alt="Oluşturulan resim"/> 
+        <a href="${imgUrl}" download="turkiyeAI_image.png" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-xl inline-block">💾 Kaydet</a>`;
+    } else { imageResult.innerHTML="❌ Resim oluşturulamadı."; }
+  }catch(err){ imageResult.innerHTML="❌ Hata: "+err.message; }
+}
+
+// 🔊 Son bot cevabını tekrar çal
+function playLastBot(){
+  if(lastBotText && 'speechSynthesis' in window){
+    const utterance=new SpeechSynthesisUtterance(lastBotText);
+    utterance.lang="tr-TR";
+    window.speechSynthesis.speak(utterance);
+  }
+}
+</script>
 </body>
-</html>
+  </html>          

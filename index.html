@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TürkiyeAI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-100 to-blue-100 min-h-screen flex flex-col items-center p-4">
+  <div class="w-full max-w-md bg-white shadow-lg rounded-2xl p-4 flex flex-col flex-grow">
+    <h1 class="text-2xl font-bold text-center text-blue-600 mb-4">🇹🇷 TürkiyeAI</h1>
+
+    <div id="chat" class="flex-1 overflow-y-auto space-y-3 mb-3">
+      <!-- Mesajlar buraya eklenecek -->
+    </div>
+
+    <div class="flex items-center space-x-2">
+      <input id="input" class="flex-1 border border-gray-300 rounded-xl px-3 py-2" placeholder="Bir şey yaz..." />
+      <button onclick="sendMessage()" class="bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-4 py-2">
+        Gönder
+      </button>
+    </div>
+  </div>
+
+  <footer class="mt-4 text-sm text-gray-500">
+    © 2025 TürkiyeAI – Google Gemini API ile güçlendirilmiştir
+  </footer>
+
+  <script>
+    const API_KEY = "AIzaSyAx-BVK-tBqTQOm3Y0QLe8TfMrl33en0_I";
+    const MODEL = "gemini-1.5-flash";
+
+    const chatBox = document.getElementById("chat");
+    const input = document.getElementById("input");
+
+    function addMessage(text, sender) {
+      const div = document.createElement("div");
+      div.className = `p-3 rounded-xl max-w-[80%] ${
+        sender === "user"
+          ? "bg-blue-100 self-end text-right ml-auto"
+          : "bg-gray-100 text-left mr-auto"
+      }`;
+      div.textContent = text;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      addMessage(text, "user");
+      input.value = "";
+
+      const body = {
+        contents: [{ role: "user", parts: [{ text }] }],
+      };
+
+      addMessage("⏳ TürkiyeAI düşünüyor...", "bot");
+
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }
+        );
+
+        const data = await res.json();
+        const reply =
+          data.candidates?.[0]?.content?.parts?.[0]?.text ||
+          "⚠️ Yanıt alınamadı.";
+        chatBox.lastChild.remove(); // “Yazıyor...” mesajını sil
+        addMessage(reply, "bot");
+      } catch (err) {
+        chatBox.lastChild.remove();
+        addMessage("❌ Hata: " + err.message, "bot");
+      }
+    }
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
+</body>
+</html>
